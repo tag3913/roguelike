@@ -1,0 +1,367 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8" />
+    <title>Don't Die</title>
+    <script src="//cdn.jsdelivr.net/npm/phaser@3.1.1/dist/phaser.js"></script>
+    <style type="text/css">
+
+        body {
+            margin: 0;
+        }
+    </style>
+</head>
+<body>
+
+
+
+<script type="text/javascript">
+
+var width = 600;
+var height = 600;
+var north = 0;
+var south = 1;
+var west = 2;
+var east = 3;
+var player;
+var stars;
+var star;
+var bombs;
+var platforms;
+var cursors;
+var score = 0;
+var gameOver = false;
+var scoreText;
+var wallWidth = 50;
+
+var SceneA = new Phaser.Class({
+
+    Extends: Phaser.Scene,
+
+    initialize:
+
+    function SceneA ()
+    {
+        Phaser.Scene.call(this, { key: 'sceneA' });
+    },
+
+    preload: preload,
+    create: create,
+    update: update
+
+});
+
+
+var scenes = [SceneA];
+scenes.push(generateNewRoom('sceneB'));
+
+var config = {
+    type: Phaser.AUTO,
+    width: width,
+    height: height,
+    physics: {
+        default: 'arcade',
+        arcade: {
+            gravity: { y: 0 },
+            debug: false
+        }
+    },
+    scene: scenes
+};
+var game = new Phaser.Game(config);
+
+
+function generateNewRoom(newKey){
+
+
+   var newRoom = new Phaser.Class({
+
+		Extends: Phaser.Scene,
+
+		initialize:
+
+		function newRoom ()
+		{
+			Phaser.Scene.call(this, { key: newKey });
+		},
+
+		preload: preload,
+		create: create,
+		update: update
+	});
+
+	return newRoom;
+
+}
+
+
+function preload ()
+{
+    this.load.image('sky', 'assets/Floor.png');
+    this.load.image('Door', 'assets/Door.png');
+    this.load.image('wall', 'assets/platformV.png');
+    this.load.image('ground', 'assets/platformH.png');
+    this.load.image('star', 'assets/coin.png');
+    this.load.image('bomb', 'assets/bomb.png');
+    this.load.spritesheet('dude', 'assets/MAN.png', { frameWidth: 32, frameHeight: 32 });
+    this.load.spritesheet('splosion', 'assets/Splosion.png', { frameWidth: 600, frameHeight: 600 });
+}
+
+
+
+function create ()
+{
+
+    //  A simple background for our game
+    this.add.image(400, 300, 'sky');
+
+    //  The platforms group contains the ground and the 2 ledges we can jump on
+    platforms = this.physics.add.staticGroup();
+
+    //Doors group
+    doors = this.physics.add.staticGroup();
+
+
+    //  Here we create the ground.
+    //  Scale it to fit the width of the game (the original sprite is 400x32 in size)
+
+    platforms.create(200, 632 - wallWidth, 'ground').setScale(2).refreshBody();
+    platforms.create(200, -32 + wallWidth, 'ground').setScale(2).refreshBody();
+
+    platforms.create(-32 + wallWidth, 200, 'wall').setScale(2).refreshBody();
+    platforms.create(632 - wallWidth, 200, 'wall').setScale(2).refreshBody();
+
+
+    //create the door
+    doors.create(565 ,316, 'Door').setScale(1.5).refreshBody();
+    doors.create(30 ,316, 'Door').setScale(1.5).refreshBody();
+
+    //  Now let's create some ledges
+    //platforms.create(350, 400, 'ground');
+    //platforms.create(50, 250, 'ground');
+    //platforms.create(750, 220, 'ground');
+
+
+
+    player = this.physics.add.sprite(100, 450, 'dude');
+    // The player and its settings
+    player.body.setSize(20, 25, 0, 0);
+    player.setScale(1.5);
+
+    //  Player physics properties. Give the little guy a slight bounce.
+    player.setBounce(0.5);
+
+    player.setCollideWorldBounds(true);
+
+
+
+    //  Our player animations, turning, walking left and walking right.
+
+    this.anims.create({
+        key: 'left',
+        frames: this.anims.generateFrameNumbers('dude', { start: 11, end: 13 }),
+        frameRate: 10,
+        repeat: -1
+    });
+
+    this.anims.create({
+	        key: 'noMove',
+	        frames: [ { key: 'dude', frame: 0 } ],
+	        frameRate: 20
+    });
+
+    this.anims.create({
+        key: 'up',
+        frames: this.anims.generateFrameNumbers('dude', { start: 7, end: 10 }),
+        frameRate: 10
+    });
+
+    this.anims.create({
+		key: 'down',
+		frames: this.anims.generateFrameNumbers('dude', { start: 0, end: 3 }),
+		frameRate: 10
+	});
+
+    this.anims.create({
+        key: 'right',
+        frames: this.anims.generateFrameNumbers('dude', { start: 4, end: 6 }),
+        frameRate: 10,
+        repeat: -1
+    });
+
+    this.anims.create({
+	    key: 'dead',
+	    frames: this.anims.generateFrameNumbers('splosion', { start: 0, end: 20 }),
+	    frameRate: 12
+	});
+
+
+
+
+
+    //  Input Events
+    cursors = this.input.keyboard.createCursorKeys();
+
+
+
+    //  Some stars to collect, 12 in total, evenly spaced 70 pixels apart along the x axis
+
+    stars = this.physics.add.group();
+    var counter;
+    for(counter = 0; counter < 7; counter++){
+        stars.create(randomCoinLocation(), randomCoinLocation(), 'star');
+        //star = this.physics.add.group({
+          // key: 'star',
+          // setXY: { x: randomCoinLocation(), y: randomCoinLocation()}
+        //});
+    }
+
+
+
+    //stars.children.iterate(function (child) {
+        //  Give each star a slightly different bounce
+       // child.setBounceY(Phaser.Math.FloatBetween(0.4, 0.8));
+    //});
+
+
+
+    bombs = this.physics.add.group();
+
+
+
+    //  The score
+    scoreText = this.add.text(16, 16, 'score: 0', { fontSize: '32px', fill: '#000' });
+
+
+
+    //  Collide the player and the stars with the platforms
+    this.physics.add.collider(player, platforms);
+    //this.physics.add.collider(stars, platforms);
+    this.physics.add.collider(bombs, platforms);
+
+
+    //  Checks to see if the player overlaps with any of the stars, if he does call the collectStar function
+
+    this.physics.add.overlap(player, stars, collectStar, null, this);
+    this.physics.add.overlap(player, doors, exit, null, this);
+    this.physics.add.collider(player, bombs, hitBomb, null, this);
+
+}
+
+function randomCoinLocation ()
+{
+   var randomNum = Math.floor(Math.random() * 451) + 100;
+   return randomNum;
+}
+
+
+
+function update ()
+{
+    if (gameOver)
+    {
+        return;
+    }
+
+    if (cursors.up.isDown)
+	{
+		player.setVelocityY(-150);
+		if(!cursors.left.isDown || !cursors.right.isDown){
+			player.anims.play('up', true);
+		}
+	}
+    else if (cursors.down.isDown)
+	{
+		player.setVelocityY(150);
+		if(!cursors.left.isDown || !cursors.right.isDown){
+			player.anims.play('down', true);
+		}
+    }
+    else
+    {
+        player.setVelocityY(0);
+    }
+
+    if (cursors.left.isDown)
+	{
+		player.setVelocityX(-150);
+		if(!cursors.up.isDown && !cursors.down.isDown){
+			player.anims.play('left', true);
+		}
+	}
+	else if (cursors.right.isDown)
+	{
+		player.setVelocityX(150);
+		if(!cursors.up.isDown && !cursors.down.isDown){
+			player.anims.play('right', true);
+		}
+	}
+	else{
+		player.setVelocityX(0);
+    }
+
+    if(!cursors.up.isDown && !cursors.down.isDown && !cursors.right.isDown && !cursors.left.isDown){
+	        player.anims.play('noMove', true);
+    }
+    //for reacting to floor
+    //&& player.body.touching.down
+}
+
+
+
+function collectStar (player, star)
+{
+    star.disableBody(true, true);
+
+    //  Add and update the score
+    score += 10;
+    scoreText.setText('Score: ' + score);
+
+    if (stars.countActive(true) === 0)
+    {
+        //  A new batch of stars to collect
+        stars.children.iterate(function (child) {
+            child.enableBody(true, randomCoinLocation(), randomCoinLocation(), true, true);
+        });
+
+
+
+        var x = (player.x < 400) ? Phaser.Math.Between(400, 600) : Phaser.Math.Between(0, 400);
+
+        var bomb = bombs.create(x, 16, 'bomb');
+        bomb.setBounce(1);
+        bomb.setCollideWorldBounds(true);
+        bomb.setVelocity(Phaser.Math.Between(-200, 200), 20);
+        bomb.allowGravity = false;
+
+    }
+
+}
+
+function exit (player, door){
+    this.scene.start('sceneB');
+}
+
+
+
+function hitBomb (player, bomb)
+
+{
+    boom = this.physics.add.sprite(300, 300, 'splosion');
+    boom.anims.play('dead', true);
+    this.physics.pause();
+    player.setTint(0xff0000);
+    player.anims.play('noMove');
+    gameOver = true;
+
+}
+
+
+</script>
+
+
+
+</body>
+
+</html>
